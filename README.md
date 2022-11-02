@@ -1,0 +1,2 @@
+# bms_downloader
+BMS譜面収集を効率化するためのスクリプト
