@@ -11,7 +11,8 @@ import codecs
 import json
 import webbrowser, urllib, requests
 from bs4 import BeautifulSoup
-
+import glob
+from pathlib import Path
 
 class UserSettings:
     def __init__(self, savefile='settings.json'):
@@ -61,7 +62,39 @@ class GUIManager:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
 
+    def check_url(self, url):
+        flag = True
+        try:
+            f = urllib.request.urlopen(url)
+            #print('OK:', url)
+            f.close()
+        except urllib.request.HTTPError:
+            #print('Not found:', url)
+            flag = False
+
+        return flag
+
+    def read_table_json(self, url):
+        ret = False
+        if self.check_url(url):
+            tmp = urllib.request.urlopen(url).read()
+            ret = json.loads(tmp)
+        return ret
+
+    # 1曲分のjsonデータを受け取ってdownload
+    def get_onesong(self, js):
+        print(f"{self.symbol}{js['level']} {js['sha256']}")
+        print(js['title'], js['artist'])
+        if js['url']:
+            print(js['url'], end='')
+        if js['url_diff']:
+            print(f"\njs['url_diff']")
+        else:
+            print(f" (同梱譜面)")
+
     def gui_setting(self):
+        self.mode = 'setting'
+        self.window.close()
         layout = [
             [sg.Text('ブラウザのファイル保存先', font=self.FONT), sg.Button('変更', font=self.FONT, key='btn_select_dl')],
             [sg.Text('', key='dir_dl', font=self.FONT)],
@@ -74,6 +107,9 @@ class GUIManager:
         self.window['dir_bms'].update(self.settings.params['dir_bms'])
 
     def gui_main(self): # GUI設定
+        self.mode = 'main' # main, setting
+        if self.window:
+            self.window.close()
         layout = [
             [sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
@@ -83,8 +119,39 @@ class GUIManager:
         ico=self.ico_path('icon.ico')
         self.window = sg.Window('BMS導入支援君', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
 
+    def gui_table(self, url): # テーブル表示用
+        self.mode = 'table'
+        url_header = re.sub(url.split('/')[-1], 'header.json', url)
+        url_dst = re.sub(url.split('/')[-1], 'score.json', url)
+        layout = [
+            [sg.Output(size=(63,8), key='output', font=('Meiryo',9))],
+            [sg.Text('')],
+            ]
+        ico=self.ico_path('icon.ico')
+
+        ### header情報から難易度名などを取得
+        info = self.read_table_json(url_header)
+        print(info)
+        self.name = info['name']
+        self.symbol = info['symbol']
+
+        tmp = self.read_table_json(url_dst)
+        print('number of songs=', len(tmp))
+
+        # ブラウザ用ディレクトリのファイルを古いものから表示
+        paths = list(Path(self.settings.params['dir_dl']).glob(r'*.*'))
+        paths.sort(key=os.path.getmtime)
+        for f in paths:
+            print(f"{f.name}  ({f.stat().st_mtime:.1f})")
+
+        #print(f"files = \n{glob.glob(self.settings.params['dir_dl']+'/*.zip')}")
+
+        ### DEBUG用なので[2]だけ対応
+        self.get_onesong(tmp[2])
+        self.window.close()
+        self.window = sg.Window('BMS導入支援君 - 難易度表モード', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
+
     def main(self):
-        self.mode = 'main' # main, setting
         self.gui_main()
         isValid = True
         while isValid:
@@ -106,12 +173,9 @@ class GUIManager:
                 else:
                     self.settings.params['lx'] = self.window.current_location()[0]
                     self.settings.params['ly'] = self.window.current_location()[1]
-                    self.window.close()
                     self.gui_main()
                     self.mode = 'main'
             elif ev == 'btn_setting':
-                self.mode = 'setting'
-                self.window.close()
                 self.gui_setting()
             elif ev.startswith('btn_select_'):
                 target = ev.split('_')[-1]
@@ -122,9 +186,7 @@ class GUIManager:
                     self.settings.params[f'dir_{target}'] = tmp
             elif ev == 'btn_read_table':
                 url = val['url_table']
-                self.mode = 'table'
-                self.window.close()
-                self.gui_table()
+                self.gui_table(url)
 
 if __name__ == '__main__':
     a = GUIManager()
