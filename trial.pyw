@@ -13,6 +13,8 @@ import webbrowser, urllib, requests
 from bs4 import BeautifulSoup
 import glob
 from pathlib import Path
+from zipmanager import ZipManager
+from extract import Extractor
 
 class UserSettings:
     def __init__(self, savefile='settings.json'):
@@ -83,6 +85,7 @@ class GUIManager:
 
     # 1曲分のjsonデータを受け取ってdownload
     def get_onesong(self, js):
+        #print(js)
         print(f"{self.symbol}{js['level']} {js['sha256']}")
         print(js['title'], js['artist'])
         if js['url']:
@@ -113,7 +116,8 @@ class GUIManager:
         layout = [
             [sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Input('', key='url_table', font=self.FONT)],
+            #[sg.Input('', key='url_table', font=self.FONT)],
+            [sg.Input('https://stellabms.xyz/dp/table.html', key='url_table', font=self.FONT)],
             #[sg.Output(size=(63,8), key='output', font=('Meiryo',9))] # ここを消すと標準出力になる
             ]
         ico=self.ico_path('icon.ico')
@@ -123,11 +127,8 @@ class GUIManager:
         self.mode = 'table'
         url_header = re.sub(url.split('/')[-1], 'header.json', url)
         url_dst = re.sub(url.split('/')[-1], 'score.json', url)
-        layout = [
-            [sg.Output(size=(63,8), key='output', font=('Meiryo',9))],
-            [sg.Text('')],
-            ]
-        ico=self.ico_path('icon.ico')
+        header=['LV','title','artist']
+        self.songs = self.read_table_json(url_dst)
 
         ### header情報から難易度名などを取得
         info = self.read_table_json(url_header)
@@ -135,21 +136,19 @@ class GUIManager:
         self.name = info['name']
         self.symbol = info['symbol']
 
-        tmp = self.read_table_json(url_dst)
-        print('number of songs=', len(tmp))
+        data = []
+        for s in self.songs:
+            onesong = [self.symbol+s['level'], s['title'], s['artist']]
+            data.append(onesong)
 
-        # ブラウザ用ディレクトリのファイルを古いものから表示
-        paths = list(Path(self.settings.params['dir_dl']).glob(r'*.*'))
-        paths.sort(key=os.path.getmtime)
-        for f in paths:
-            print(f"{f.name}  ({f.stat().st_mtime:.1f})")
+        layout = [
+            [sg.Table(data, headings=header, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40], justification='left', size=(1,20))],
+            [sg.Button('DL', key='btn_download'),sg.Button('parse', key='btn_parse')],
+            ]
+        ico=self.ico_path('icon.ico')
 
-        #print(f"files = \n{glob.glob(self.settings.params['dir_dl']+'/*.zip')}")
-
-        ### DEBUG用なので[2]だけ対応
-        self.get_onesong(tmp[2])
         self.window.close()
-        self.window = sg.Window('BMS導入支援君 - 難易度表モード', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
+        self.window = sg.Window('BMS導入支援君 - 難易度表モード', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(800,400))
 
     def main(self):
         self.gui_main()
@@ -187,6 +186,39 @@ class GUIManager:
             elif ev == 'btn_read_table':
                 url = val['url_table']
                 self.gui_table(url)
+            elif ev == 'btn_download':
+                for idx in val[0]:
+                    print(f"selected: {self.songs[idx]['title']}, sha256: {self.songs[idx]['sha256']}")
+                    #print(f"{self.songs[idx]}")
+                    if self.songs[idx]['url'] != '':
+                        webbrowser.open(self.songs[idx]['url'])
+                    if self.songs[idx]['url_diff'] != '':
+                        webbrowser.open(self.songs[idx]['url_diff'])
+            elif ev == 'btn_parse':
+                extractor = Extractor(self.settings.params['dir_dl'], self.settings.params['dir_bms'])
+                # 本体を解凍
+                for z in extractor.ziplist:
+                    if z.is_for_bms and not z.only_bms:
+                        print(f'unpacking {z.filename} ')
+                        z.extractall(self.settings.params['dir_bms'])
+                # 差分を解凍
+                for z in extractor.ziplist:
+                    if z.is_for_bms and z.only_bms:
+                        for hontai in extractor.ziplist:
+                            if hontai.is_for_bms and not hontai.only_bms:
+                                #print(z.filename, z.wavelist)
+                                #print(hontai.filename, hontai.wavelist)
+                                for fumen in z.hashes.values():
+                                    z_wavelist = z.get_wavelist(fumen)
+                                val = hontai.get_score_wavelist(z_wavelist) # 本体hontaiに対する現在の譜面zのスコアを計算
+                                if val>=0.95:
+                                    # 差分をhontaiフォルダに解凍
+                                    dir_dst = hontai.get_dst_folder()
+                                    print(f"sabun:{z.filename}, hontai:{hontai.filename}, score:{val:.2f}, dir_dst:{dir_dst}")
+                                    z.extract_sabun(self.settings.params['dir_bms']+'/'+dir_dst)
+                                    break # 複数の本体に入れる必要はないのでスキップ
+
+                                    #TODO 複数のhontaiフォルダが含まれる場合の対応
 
 if __name__ == '__main__':
     a = GUIManager()
