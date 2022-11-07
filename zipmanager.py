@@ -79,11 +79,17 @@ class ZipManager:
     def get_score_wavelist(self, _wavelist):
         ret = 0
 
-        for wav in _wavelist:
-            if wav in self.wavelist:
+        for wav in self.wavelist:
+            if wav in _wavelist:
                 ret += 1
 
-        return ret / len(_wavelist)
+        return ret / len(self.wavelist)
+
+    # 譜面zipに対して実行、BMSフォルダ内の各サブフォルダを走査し、
+    # 譜面をスコアが高いサブフォルダに解凍する。こちらに一本化したい
+    # TODO
+    def get_score_and_extract(self, dir_dst, threshold=0.95):
+        pass
 
     def extractall(self, target_dir):
         dst = target_dir
