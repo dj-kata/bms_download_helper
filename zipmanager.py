@@ -1,6 +1,9 @@
-import zipfile
+import zipfile, rarfile # winrarインストール必須?
 import sys, re
 import hashlib # hashlib.sha256(data).hexdigest()
+import glob
+# winrarインストールしないとダメかも?
+# https://visatch.medium.com/python-rarfile-package-error-rarfile-rarcannotexec-cannot-find-working-tool-window-only-630ff25f4ef8
 
 # TODO
 ### 将来的に、lzh, rarあたりへの対応は必要か
@@ -10,9 +13,14 @@ import hashlib # hashlib.sha256(data).hexdigest()
 class ZipManager:
     def __init__(self, filename):
         self.filename = filename
-        self.zipfile  = zipfile.ZipFile(filename)
+        self.is_rar_file = False
+        if str(self.filename)[-4:] == '.rar':
+            self.is_rar_file = True
+            self.zipfile  = rarfile.RarFile(filename)
+        else:
+            self.zipfile  = zipfile.ZipFile(filename)
         self.filelist = self.zipfile.namelist() # 中身のリスト、lst[0]がディレクトリならそのまま解凍できそう
-        self.wavelist = []
+        self.wavelist = [] # このzipファイルに含まれる音声ファイル一覧
         self.has_folder = False
         self.only_bms   = True # bmsファイルしかないかのフラグ、将来消すかも
         self.hashes = {} # 同梱bmsファイルのsha256ハッシュ値一覧
@@ -26,7 +34,10 @@ class ZipManager:
         print(f"{self.filename}, only_bms:{self.only_bms}, has_folder:{self.has_folder}, is_for_bms:{self.is_for_bms}")
 
     def update_has_folder(self):
-        self.has_folder = self.filelist[0][-1] == '/'
+        if self.is_rar_file:
+            self.has_folder = len(self.filelist[0].split('/')) == 2
+        else:
+            self.has_folder = self.filelist[0][-1] == '/'
 
     def get_dst_folder(self):
         ret = False
@@ -53,10 +64,15 @@ class ZipManager:
     def update_hashes(self):
         for f in self.filelist: # ファイル一覧から1つずつ確認
             if ('.bms' in f) or ('.bme' in f): # BMS譜面ならハッシュ値計算
-                with zipfile.ZipFile(self.filename) as myzip:
-                    with myzip.open(f) as myfile:
-                        hashval = hashlib.sha256(myfile.read()).hexdigest()
+                if self.is_rar_file:
+                    with rarfile.RarFile(self.filename) as rf:
+                        hashval = hashlib.sha256(rf.read(f)).hexdigest()
                         self.hashes[hashval] = f
+                else:
+                    with zipfile.ZipFile(self.filename) as myzip:
+                        with myzip.open(f) as myfile:
+                            hashval = hashlib.sha256(myfile.read()).hexdigest()
+                            self.hashes[hashval] = f
     
     # 譜面のファイル名を受け取り、bme内で使っているwav/oggのリストを生成して返す
     def get_wavelist(self, filename):
@@ -87,23 +103,50 @@ class ZipManager:
 
     # 譜面zipに対して実行、BMSフォルダ内の各サブフォルダを走査し、
     # 譜面をスコアが高いサブフォルダに解凍する。こちらに一本化したい
-    # TODO
     def get_score_and_extract(self, dir_dst, threshold=0.95):
-        pass
+        # 1番目の譜面のwavリストを作成
+        this_wavelist = self.get_wavelist(list(self.hashes.values())[0])
+        for subdir in glob.glob(dir_dst+'/*'):
+            subdir_wavelist = []
+            for f in glob.glob(subdir+'/*'):
+                if f.lower()[-4:] in ['.wav', '.ogg']:
+                    subdir_wavelist.append(f.split('.')[0].split('/')[-1].split('\\')[-1])
+            val = 0
+
+            for wav in this_wavelist:
+                if wav in subdir_wavelist:
+                    val += 1
+            val = val / len(this_wavelist)
+            if val >= threshold:
+                print(f"{self.filename} -> {subdir} (score:{val:.2f})")
+                for fumen in self.hashes.values():
+                    if len(fumen.split('/')) == 1:
+                        self.zipfile.extract(fumen, subdir)
+                    else: # 譜面zipにサブフォルダが含まれる場合、ファイルの中身を直接書き込む(APIが用意されていない)
+                        with open(subdir+f"/{fumen.split('/')[1]}", 'wb') as outbms:
+                            outbms.write(self.zipfile.open(fumen).read())
+
 
     def extractall(self, target_dir):
         dst = target_dir
+        error = ''
         if not self.has_folder:
             # WindowsPathで取得したスペース入りのファイル名がパースできない
             # F文字列ではどうやらバックスラッシュが使えないらしい
             tmp = str(self.filename).split('\\')[-1].split('/')[-1].split('.')[0]
             dst += f"/{tmp}"
-        self.zipfile.extractall(dst)
-
-    # 差分の解凍用。サブフォルダに入っていても譜面だけ解凍したいので別関数とする
-    def extract_sabun(self, target_dir):
-        for fumen in self.hashes.values():
-            self.zipfile.extract(fumen, target_dir)
+        print(self.filename, self.is_rar_file, self.filelist[0])
+        if self.is_rar_file:
+            for f in self.zipfile.infolist():
+                try:
+                    self.zipfile.extract(f.filename, dst)
+                except:
+                    error += f'解凍エラー; {f.filename}\n'
+        else:
+            self.zipfile.extractall(dst)
+        if error != '':
+            print(error)
+        return error
 
 if __name__ == '__main__':
     a = ZipManager('ziptest/with_dir.zip')
