@@ -15,6 +15,7 @@ import glob
 from pathlib import Path
 from zipmanager import ZipManager
 from extract import Extractor
+import rarfile
 
 class UserSettings:
     def __init__(self, savefile='settings.json'):
@@ -126,13 +127,12 @@ class GUIManager:
     def gui_table(self, url): # テーブル表示用
         self.mode = 'table'
         url_header = re.sub(url.split('/')[-1], 'header.json', url)
-        url_dst = re.sub(url.split('/')[-1], 'score.json', url)
+        ### header情報から難易度名などを取得
+        info = self.read_table_json(url_header)
+        url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
         header=['LV','title','artist']
         self.songs = self.read_table_json(url_dst)
 
-        ### header情報から難易度名などを取得
-        info = self.read_table_json(url_header)
-        print(info)
         self.name = info['name']
         self.symbol = info['symbol']
 
@@ -195,30 +195,19 @@ class GUIManager:
                     if self.songs[idx]['url_diff'] != '':
                         webbrowser.open(self.songs[idx]['url_diff'])
             elif ev == 'btn_parse':
-                extractor = Extractor(self.settings.params['dir_dl'], self.settings.params['dir_bms'])
-                # 本体を解凍
-                for z in extractor.ziplist:
-                    if z.is_for_bms and not z.only_bms:
-                        print(f'unpacking {z.filename} ')
-                        z.extractall(self.settings.params['dir_bms'])
-                # 差分を解凍
-                for z in extractor.ziplist:
-                    if z.is_for_bms and z.only_bms:
-                        for hontai in extractor.ziplist:
-                            if hontai.is_for_bms and not hontai.only_bms:
-                                #print(z.filename, z.wavelist)
-                                #print(hontai.filename, hontai.wavelist)
-                                for fumen in z.hashes.values():
-                                    z_wavelist = z.get_wavelist(fumen)
-                                val = hontai.get_score_wavelist(z_wavelist) # 本体hontaiに対する現在の譜面zのスコアを計算
-                                if val>=0.95:
-                                    # 差分をhontaiフォルダに解凍
-                                    dir_dst = hontai.get_dst_folder()
-                                    print(f"sabun:{z.filename}, hontai:{hontai.filename}, score:{val:.2f}, dir_dst:{dir_dst}")
-                                    z.extract_sabun(self.settings.params['dir_bms']+'/'+dir_dst)
-                                    break # 複数の本体に入れる必要はないのでスキップ
-
-                                    #TODO 複数のhontaiフォルダが含まれる場合の対応
+                try:
+                    extractor = Extractor(self.settings.params['dir_dl'], self.settings.params['dir_bms'])
+                    # 本体を解凍
+                    for z in extractor.ziplist:
+                        if z.is_for_bms and not z.only_bms:
+                            print(f'unpacking {z.filename} ')
+                            z.extractall(self.settings.params['dir_bms'])
+                    # 差分を解凍
+                    for z in extractor.ziplist:
+                        if z.is_for_bms and z.only_bms:
+                            z.get_score_and_extract(self.settings.params['dir_bms'], 0.95)
+                except rarfile.RarCannotExec:
+                    sg.popup('error! rar解凍ソフトがインストールされていません')
 
 if __name__ == '__main__':
     a = GUIManager()

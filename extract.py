@@ -29,10 +29,10 @@ class Extractor:
         paths = list(Path(self.dir_dl).glob(r'*.*'))
         paths.sort(key=os.path.getmtime)
         for f in paths:
-            if '.zip' in str(f):
+            if ('.zip' in str(f)) or ('.rar' in str(f)):
                 zp = ZipManager(f)
                 self.ziplist.append(zp)
-                zp.disp()
+                #zp.disp()
 
     def extract_test(self): # beyond the alice[14N]
         target_hash = '46e0afa589a02f91f9da7b25c9ecb5d3790f797a1e64d65d7ead7a6546cfadb0'
