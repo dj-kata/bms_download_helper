@@ -83,7 +83,8 @@ class ZipManager:
                     else:
                         line = line.decode('cp932').strip()
                         if line.startswith('#WAV'):
-                            tmp = re.findall('\S+', line)[-1].split('.')[0].split('/')[-1] # ogg/wavに対応するため、拡張子はここで消す
+                            tmp = line[7:-4] # ogg/wavに対応するため、拡張子はここで消す
+                            #tmp = re.findall('\S+', line)[-1].split('.')[0].split('/')[-1] # ogg/wavに対応するため、拡張子はここで消す
                             ret.append(tmp)
         return ret
 
