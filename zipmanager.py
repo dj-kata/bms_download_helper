@@ -31,13 +31,10 @@ class ZipManager:
         self.is_for_bms = len(self.hashes.keys()) > 0 # BMS用の圧縮ファイルであるかどうかを示す
 
     def disp(self):
-        print(f"{self.filename}, only_bms:{self.only_bms}, has_folder:{self.has_folder}, is_for_bms:{self.is_for_bms}")
+        print(f"{self.filename}, only_bms:{self.only_bms}, has_folder:{self.has_folder}, is_for_bms:{self.is_for_bms}, is_rar_file:{self.is_rar_file}")
 
     def update_has_folder(self):
-        if self.is_rar_file:
-            self.has_folder = len(self.filelist[0].split('/')) == 2
-        else:
-            self.has_folder = self.filelist[0][-1] == '/'
+        self.has_folder = (len(self.filelist[0].split('/')) == 2) or (self.filelist[0][-1] == '/')
 
     def get_dst_folder(self):
         ret = False
