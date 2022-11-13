@@ -74,18 +74,22 @@ class ZipManager:
     # 譜面のファイル名を受け取り、bme内で使っているwav/oggのリストを生成して返す
     def get_wavelist(self, filename):
         ret = []
-        with zipfile.ZipFile(self.filename) as myzip:
-            with myzip.open(filename) as f:
-                while 1:
-                    line = f.readline()
-                    if not line:
-                        break
-                    else:
-                        line = line.decode('cp932').strip()
-                        if line.startswith('#WAV'):
-                            tmp = line[7:-4] # ogg/wavに対応するため、拡張子はここで消す
-                            #tmp = re.findall('\S+', line)[-1].split('.')[0].split('/')[-1] # ogg/wavに対応するため、拡張子はここで消す
-                            ret.append(tmp)
+        #print(self.filename)
+        if str(self.filename)[-4:] == '.rar':
+            thisfile = rarfile.RarFile(self.filename)
+        elif str(self.filename)[-4:] == '.zip':
+            thisfile = zipfile.ZipFile(self.filename)
+        with thisfile.open(filename) as f:
+            while 1:
+                line = f.readline()
+                if not line:
+                    break
+                else:
+                    line = line.decode('cp932').strip()
+                    if line.startswith('#WAV'):
+                        tmp = line[7:-4] # ogg/wavに対応するため、拡張子はここで消す
+                        #tmp = re.findall('\S+', line)[-1].split('.')[0].split('/')[-1] # ogg/wavに対応するため、拡張子はここで消す
+                        ret.append(tmp)
         return ret
 
     # wave一覧を受け取り、このzipfile内に含まれる物の割合を計算する
@@ -106,7 +110,10 @@ class ZipManager:
         this_wavelist = self.get_wavelist(list(self.hashes.values())[0])
         for subdir in glob.glob(dir_dst+'/*'):
             subdir_wavelist = []
-            for f in glob.glob(subdir+'/*'):
+            # 角括弧があると拾えないので対策する
+            subdir_convblacket = subdir.replace("[","\\[").replace("]","\\]")
+            subdir_convblacket = subdir_convblacket.replace("\\[","[[]").replace("\\]","[]]")
+            for f in glob.glob(subdir_convblacket+'/*'):
                 if f.lower()[-4:] in ['.wav', '.ogg']:
                     subdir_wavelist.append(f.split('.')[0].split('/')[-1].split('\\')[-1])
             val = 0
@@ -115,13 +122,15 @@ class ZipManager:
                 if wav in subdir_wavelist:
                     val += 1
             val = val / len(this_wavelist)
+            if len(subdir_wavelist) == 0:
+                print(f"dir={subdir}, val={val:.2f}")
             if val >= threshold:
                 print(f"{self.filename} -> {subdir} (score:{val:.2f})")
                 for fumen in self.hashes.values():
                     if len(fumen.split('/')) == 1:
                         self.zipfile.extract(fumen, subdir)
                     else: # 譜面zipにサブフォルダが含まれる場合、ファイルの中身を直接書き込む(APIが用意されていない)
-                        with open(subdir+f"/{fumen.split('/')[1]}", 'wb') as outbms:
+                        with open(subdir+f"\{fumen.split('/')[1]}", 'wb') as outbms:
                             outbms.write(self.zipfile.open(fumen).read())
 
 
@@ -141,7 +150,10 @@ class ZipManager:
                 except:
                     error += f'解凍エラー; {f.filename}\n'
         else:
-            self.zipfile.extractall(dst)
+            try:
+                self.zipfile.extractall(dst)
+            except:
+                error += f'解凍エラー; {self.zipfile.filename}\n'
         if error != '':
             print(error)
         return error
