@@ -30,6 +30,7 @@ class Extractor:
         paths.sort(key=os.path.getmtime)
         for f in paths:
             if ('.zip' in str(f)) or ('.rar' in str(f)):
+                print('reading:', f)
                 zp = ZipManager(f)
                 self.ziplist.append(zp)
                 #zp.disp()

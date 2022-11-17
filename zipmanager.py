@@ -2,6 +2,8 @@ import zipfile, rarfile # winrarインストール必須?
 import sys, re
 import hashlib # hashlib.sha256(data).hexdigest()
 import glob
+import chardet
+import traceback
 # winrarインストールしないとダメかも?
 # https://visatch.medium.com/python-rarfile-package-error-rarfile-rarcannotexec-cannot-find-working-tool-window-only-630ff25f4ef8
 
@@ -27,14 +29,22 @@ class ZipManager:
         self.update_has_folder()
         self.update_hashes()
         self.update_only_bms()
+        self.update_for_bms()
         self.update_wavelist()
-        self.is_for_bms = len(self.hashes.keys()) > 0 # BMS用の圧縮ファイルであるかどうかを示す
 
     def disp(self):
         print(f"{self.filename}, only_bms:{self.only_bms}, has_folder:{self.has_folder}, is_for_bms:{self.is_for_bms}, is_rar_file:{self.is_rar_file}")
 
     def update_has_folder(self):
         self.has_folder = (len(self.filelist[0].split('/')) == 2) or (self.filelist[0][-1] == '/')
+
+    def update_for_bms(self): # bms譜面が含まれていればBMS用フォルダとみなす。rarファイルで全譜面ファイルがエラーを吐く場合に対応(dpsl2、anata_ogg.rarなど)
+        ret = False
+        for f in self.filelist:
+            if ('bms' in f.lower()) or ('bme' in f.lower()) or ('bml' in f.lower()):
+                ret = True
+                break
+        self.is_for_bms = ret
 
     def get_dst_folder(self):
         ret = False
@@ -54,17 +64,24 @@ class ZipManager:
     def update_only_bms(self):
         for f in self.filelist:
             if f[-1] != '/': # フォルダは除外
-                if f[-4:] not in ['.bms', '.bme'] and f[-4:].lower() in ['.ogg', '.wav']: # 音声ファイルがあれば本体とみなす
+                if f[-4:] not in ['.bms', '.bme', '.bml'] and f[-4:].lower() in ['.ogg', '.wav']: # 音声ファイルがあれば本体とみなす
                     self.only_bms = False
                     break
 
+    # ファイルポインタを解放する
+    def close(self):
+        self.zipfile.close()
+
     def update_hashes(self):
         for f in self.filelist: # ファイル一覧から1つずつ確認
-            if ('.bms' in f) or ('.bme' in f): # BMS譜面ならハッシュ値計算
+            if ('.bms' in f) or ('.bme' in f) or ('.bml' in f): # BMS譜面ならハッシュ値計算
                 if self.is_rar_file:
                     with rarfile.RarFile(self.filename) as rf:
-                        hashval = hashlib.sha256(rf.read(f)).hexdigest()
-                        self.hashes[hashval] = f
+                        try:
+                            hashval = hashlib.sha256(rf.read(f)).hexdigest()
+                            self.hashes[hashval] = f
+                        except rarfile.BadRarFile:
+                            print('error(BadRarFile)!!,', f)
                 else:
                     with zipfile.ZipFile(self.filename) as myzip:
                         with myzip.open(f) as myfile:
@@ -106,6 +123,7 @@ class ZipManager:
     # 譜面zipに対して実行、BMSフォルダ内の各サブフォルダを走査し、
     # 譜面をスコアが高いサブフォルダに解凍する。こちらに一本化したい
     def get_score_and_extract(self, dir_dst, threshold=0.95):
+        ret = 0 # 最高スコアを返す
         # 1番目の譜面のwavリストを作成
         this_wavelist = self.get_wavelist(list(self.hashes.values())[0])
         for subdir in glob.glob(dir_dst+'/*'):
@@ -122,8 +140,8 @@ class ZipManager:
                 if wav in subdir_wavelist:
                     val += 1
             val = val / len(this_wavelist)
-            if len(subdir_wavelist) == 0:
-                print(f"dir={subdir}, val={val:.2f}")
+            #if len(subdir_wavelist) == 0:
+            #    print(f"dir={subdir}, val={val:.2f}")
             if val >= threshold:
                 print(f"{self.filename} -> {subdir} (score:{val:.2f})")
                 for fumen in self.hashes.values():
@@ -132,6 +150,9 @@ class ZipManager:
                     else: # 譜面zipにサブフォルダが含まれる場合、ファイルの中身を直接書き込む(APIが用意されていない)
                         with open(subdir+f"\{fumen.split('/')[1]}", 'wb') as outbms:
                             outbms.write(self.zipfile.open(fumen).read())
+            if val > ret:
+                ret = val
+        return ret
 
 
     def extractall(self, target_dir):
@@ -142,20 +163,24 @@ class ZipManager:
             # F文字列ではどうやらバックスラッシュが使えないらしい
             tmp = str(self.filename).split('\\')[-1].split('/')[-1].split('.')[0]
             dst += f"/{tmp}"
-        print(self.filename, self.is_rar_file, self.filelist[0])
-        if self.is_rar_file:
-            for f in self.zipfile.infolist():
-                try:
-                    self.zipfile.extract(f.filename, dst)
-                except:
-                    error += f'解凍エラー; {f.filename}\n'
-        else:
+
+        # ファイル名をUTF-8に変換しておく
+        for f in self.zipfile.infolist():
+            #if not f.orig_filename.isascii():
+            #    if chardet.detect(f.orig_filename)['encoding'] != 'Windows-1254':
+            #        f.filename = f.orig_filename.encode('cp437').decode('cp932')
+            #self.zipfile.extract(f, dst)
             try:
-                self.zipfile.extractall(dst)
+                f.filename = f.orig_filename.encode('cp437').decode('cp932')
             except:
-                error += f'解凍エラー; {self.zipfile.filename}\n'
-        if error != '':
-            print(error)
+                pass
+                #traceback.print_exc()
+            try:
+                self.zipfile.extract(f, dst)
+            except:
+                #traceback.print_exc()
+                error += f'error!; {f.filename}\n'
+        print(error)
         return error
 
 if __name__ == '__main__':
