@@ -218,7 +218,7 @@ class GUIManager:
             self.window['table'].update(data)
             self.update_info('難易度表読み込み完了。')
         except: # URLがおかしい
-            traceback.print_exc()
+            #traceback.print_exc()
             self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
 
     def update_info(self, msg):
@@ -290,7 +290,7 @@ class GUIManager:
         th_parse = False
         while isValid:
             ev, val = self.window.read()
-            print(f"event='{ev}', values={val}, isValid={isValid}")
+            #print(f"event='{ev}', values={val}, isValid={isValid}")
             # 設定を最新化
             if self.settings and val: # 起動後、そのまま何もせずに終了するとvalが拾われないため対策している
                 self.settings.params['lx'] = self.window.current_location()[0]
