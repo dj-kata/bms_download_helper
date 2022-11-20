@@ -69,4 +69,6 @@ http://www.ribbit.xyz/bms/tables/table_list.html
 Apache License 2.0に準じるものとします。
 
 # 連絡先
-Twitter: cold_planet_
+気になった点などありましたら、本リポジトリのIssueやTwitterあたりにお願いします。
+
+Twitter: @[cold_planet_](https://twitter.com/cold_planet_)
