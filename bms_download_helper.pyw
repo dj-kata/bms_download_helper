@@ -95,6 +95,9 @@ class GUIManager:
 
         return flag
 
+    def check_dir(self):
+        return os.path.exists(self.settings.params['dir_dl']) & os.path.exists(self.settings.params['dir_bms'])
+
     def get_header_filename(self, url):
         ret = False
         if self.check_url(url):
@@ -356,10 +359,15 @@ class GUIManager:
                 self.update_info('選択した曲の本体・差分のURLを開きました。ブラウザからDLをお願いします。')
                 
             elif ev == 'btn_parse':
-                if th_parse:
-                    th_parse.join()
-                th_parse = threading.Thread(target=self.parse_all, daemon=True)
-                th_parse.start()
+                dir_ok = self.check_dir()
+                if not dir_ok:
+                    sg.popup('ディレクトリが設定されていません！\nブラウザのファイル保存先及び、BMSデータの展開先を指定してください。')
+                    self.gui_setting()
+                else:
+                    if th_parse:
+                        th_parse.join()
+                    th_parse = threading.Thread(target=self.parse_all, daemon=True)
+                    th_parse.start()
 
 if __name__ == '__main__':
     a = GUIManager()
