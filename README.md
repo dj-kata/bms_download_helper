@@ -13,12 +13,21 @@ BMS譜面収集を効率化するツールです。
 
 # 動作環境
 下記の環境で確認しています。
-```
-OS: Windows10 64bit(21H2)
-CPU: Intel系(i7-12700F)
-GPU: NVIDIA系(RTX3050)
-ウイルス対策ソフト: Windows Defender
-```
+
+ <table>
+    <tr>
+      <td>OS</td>
+      <td>Windows10 64bit (22H2)</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Core i7-12700F</td>
+    </tr>
+    <tr>
+      <td>GPU</td>
+      <td>NVIDIA RTX3050</td>
+    </tr>
+ </table>
 
 注意点
 - 32bitOSでは動作しません。
