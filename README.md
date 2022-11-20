@@ -9,6 +9,8 @@ BMS譜面収集を効率化するツールです。
 同様な機能を持つ既存のソフトが私のPCでは動かなかったので、  
 多くの環境で動作するPython3(+tkinter)で書いています。
 
+![image](https://user-images.githubusercontent.com/61326119/202892884-aca2685c-ec6f-4165-9a9e-334b85d50be1.png)
+
 # 動作環境
 下記の環境で確認しています。
 ```
