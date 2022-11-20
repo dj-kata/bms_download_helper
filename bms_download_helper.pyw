@@ -17,6 +17,7 @@ from zipmanager import ZipManager
 from extract import Extractor
 import rarfile
 import shutil
+import traceback
 
 SWNAME = 'BMS Download Helper'
 SWVER  = 'v1.0'
@@ -94,6 +95,18 @@ class GUIManager:
 
         return flag
 
+    def get_header_filename(self, url):
+        ret = False
+        if self.check_url(url):
+            tmp = urllib.request.urlopen(url).read()
+            soup = BeautifulSoup(tmp, 'html.parser')
+            metas = soup.find_all('meta')
+            for m in metas:
+                if 'name' in m.attrs.keys():
+                    if m.attrs['name'] == 'bmstable':
+                        ret = m.attrs['content']
+        return ret
+
     def read_table_json(self, url):
         ret = False
         print(url, 'check_url:',self.check_url(url))
@@ -153,7 +166,7 @@ class GUIManager:
         if self.window:
             self.window.close()
         self.mode = 'main'
-        header=['LV','Title','Artist','Proposer','差分が別','sha256']
+        header=['LV','Title','Artist','差分が別','Proposer','hash']
         menuitems = [['ファイル',['設定',]],['ヘルプ',[f'{SWNAME}について']]]
         right_click_menu = ['&Right', ['貼り付け']]
         layout = [
@@ -172,25 +185,40 @@ class GUIManager:
 
     def update_table(self, url):
         try:
-            url_header = re.sub(url.split('/')[-1], 'header.json', url)
+            header_filename = self.get_header_filename(url)
+            url_header = re.sub(url.split('/')[-1], header_filename, url)
             ### header情報から難易度名などを取得
             info = self.read_table_json(url_header)
             url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
             self.songs = self.read_table_json(url_dst)
+            print(f'url_header = {url_header}')
+            print(f'url_dst = {url_dst}')
 
             self.name = info['name']
             self.symbol = info['symbol']
+            print(f"name:{self.name}, symbol:{self.symbol}")
 
             data = []
             for s in self.songs:
                 has_sabun = ''
                 if s['url_diff'] != "":
                     has_sabun = '○'
-                onesong = [self.symbol+s['level'], s['title'], s['artist'], s['proposer'], has_sabun, s['sha256']]
+                if 'proposer' in s.keys():
+                    proposer = s['proposer']
+                else:
+                    proposer = ''
+                if 'sha256' in s.keys():
+                    hashval = s['sha256']
+                elif 'md5' in s.keys():
+                    hashval = s['md5']
+                else:
+                    hashval = ''
+                onesong = [self.symbol+s['level'], s['title'], s['artist'], has_sabun, proposer, hashval]
                 data.append(onesong)
             self.window['table'].update(data)
             self.update_info('難易度表読み込み完了。')
         except: # URLがおかしい
+            traceback.print_exc()
             self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
 
     def update_info(self, msg):
@@ -262,7 +290,7 @@ class GUIManager:
         th_parse = False
         while isValid:
             ev, val = self.window.read()
-            #print(f"event='{ev}', values={val}, isValid={isValid}")
+            print(f"event='{ev}', values={val}, isValid={isValid}")
             # 設定を最新化
             if self.settings and val: # 起動後、そのまま何もせずに終了するとvalが拾われないため対策している
                 self.settings.params['lx'] = self.window.current_location()[0]
@@ -274,7 +302,8 @@ class GUIManager:
                 if 'chk_skip_rar'in val.keys():
                     self.settings.params['skip_rar'] = val['chk_skip_rar']
             
-            if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'btn_close_setting', 'btn_close_info'): # 終了処理
+            #if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'btn_close_setting', 'btn_close_info'): # 終了処理
+            if ev in (sg.WIN_CLOSED, '-WINDOW CLOSE ATTEMPTED-', 'btn_close_setting', 'btn_close_info'): # 終了処理
                 if self.mode == 'main':
                     self.settings.params['lx'] = self.window.current_location()[0]
                     self.settings.params['ly'] = self.window.current_location()[1]
@@ -293,7 +322,7 @@ class GUIManager:
                     self.window['txt_info'].update(val[ev])
             elif ev in ('btn_setting', '設定'):
                 self.gui_setting()
-            elif ev in (f'{SWNAME}について'):
+            elif ev  == f'{SWNAME}について':
                 self.gui_info()
             elif ev.startswith('URL '): # URLをブラウザで開く;info用
                 url = ev.split(' ')[1]
@@ -318,7 +347,8 @@ class GUIManager:
                 self.update_table(url)
             elif ev == 'btn_download':
                 for idx in val['table']:
-                    print(f"selected: {self.songs[idx]['title']}, sha256: {self.songs[idx]['sha256']}")
+                    #print(f"selected: {self.songs[idx]['title']}, hash: {self.songs[idx]['sha256']}")
+                    print(f"selected: {self.songs[idx]['title']}")
                     if self.songs[idx]['url'] != '':
                         webbrowser.open(self.songs[idx]['url'])
                     if self.songs[idx]['url_diff'] != '':
