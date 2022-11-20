@@ -155,12 +155,13 @@ class GUIManager:
         self.mode = 'main'
         header=['LV','Title','Artist','Proposer','差分が別','sha256']
         menuitems = [['ファイル',['設定',]],['ヘルプ',[f'{SWNAME}について']]]
+        right_click_menu = ['&Right', ['貼り付け']]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
             #[sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(75,1))],
+            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(75,1), right_click_menu=right_click_menu)],
             [sg.Table([], key='table', headings=header, font=self.FONT, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40,10,7,15], justification='left', size=(1,10))],
             [sg.Text('', key='txt_info', font=('Meiryo',10))],
             ]
@@ -250,7 +251,7 @@ class GUIManager:
 
         if flg_err:
             #sg.popup('一部ファイルの解凍時にエラーが発生しました。\n(rar解凍ソフトがインストールされていないかも?)\nWinRARのインストールをお願いします。\nhttps://github.com/dj-kata/bms_downloader')
-            self.update_info('展開完了。一部ファイルの解凍時にエラーが発生しました。(RARファイル関連?)')
+            self.update_info('展開完了。一部ファイルの解凍時にエラーが発生しました。(RAR関連 or 本体フォルダ未検出?)')
         else:
             self.update_info(f'DLフォルダ内ファイルの展開完了。')
 
@@ -294,9 +295,16 @@ class GUIManager:
                 self.gui_setting()
             elif ev in (f'{SWNAME}について'):
                 self.gui_info()
-            elif ev.startswith('URL '):
+            elif ev.startswith('URL '): # URLをブラウザで開く;info用
                 url = ev.split(' ')[1]
                 webbrowser.open(url)
+            elif ev == '貼り付け': # URL入力欄でのペースト
+                try:
+                    clipboard_text = self.window["url_table"].Widget.clipboard_get()
+                    insert_pos = self.window["url_table"].Widget.index("insert")
+                    self.window["url_table"].Widget.insert(insert_pos, clipboard_text)
+                except:
+                    pass
             elif ev.startswith('btn_select_'):
                 target = ev.split('_')[-1]
                 #tmp = sg.popup_get_folder('ブラウザのファイル保存先を指定してください。')
