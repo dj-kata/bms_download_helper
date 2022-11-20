@@ -18,10 +18,11 @@ from zipmanager import ZipManager
 """
 
 class Extractor:
-    def __init__(self, dir_dl, dir_bms):
+    def __init__(self, dir_dl, dir_bms, skip_threshold):
         self.dir_dl = dir_dl
         self.dir_bms = dir_bms
         self.ziplist = []
+        self.skip_threshold = skip_threshold
         self.update_ziplist()
 
     def update_ziplist(self): # ブラウザのDLフォルダを監視

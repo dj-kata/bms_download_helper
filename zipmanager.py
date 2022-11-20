@@ -16,6 +16,7 @@ class ZipManager:
     def __init__(self, filename):
         self.filename = filename
         self.is_rar_file = False
+        self.has_error = False # 
         if str(self.filename)[-4:] == '.rar':
             self.is_rar_file = True
             self.zipfile  = rarfile.RarFile(filename)
@@ -27,7 +28,7 @@ class ZipManager:
         self.only_bms   = True # bmsファイルしかないかのフラグ、将来消すかも
         self.hashes = {} # 同梱bmsファイルのsha256ハッシュ値一覧
         self.update_has_folder()
-        self.update_hashes()
+        self.update_hashes() # 書庫内全ファイルを確認するループ,bms譜面ファイルはreadも実行
         self.update_only_bms()
         self.update_for_bms()
         self.update_wavelist()
@@ -81,7 +82,8 @@ class ZipManager:
                             hashval = hashlib.sha256(rf.read(f)).hexdigest()
                             self.hashes[hashval] = f
                         except rarfile.BadRarFile:
-                            print('error(BadRarFile)!!,', f)
+                            self.has_error = True # この時点で失敗フラグを立てておく(実質的に解凍失敗)
+                            print('error!BadRarFile;(ハッシュ値取得失敗),', f)
                 else:
                     with zipfile.ZipFile(self.filename) as myzip:
                         with myzip.open(f) as myfile:
@@ -154,7 +156,6 @@ class ZipManager:
                 ret = val
         return ret
 
-
     def extractall(self, target_dir):
         dst = target_dir
         error = ''
@@ -179,8 +180,7 @@ class ZipManager:
                 self.zipfile.extract(f, dst)
             except:
                 #traceback.print_exc()
-                error += f'error!; {f.filename}\n'
-        print(error)
+                error = f'error!; {f.filename}\n'
         return error
 
 if __name__ == '__main__':

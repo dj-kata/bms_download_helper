@@ -18,12 +18,12 @@ from extract import Extractor
 import rarfile
 import shutil
 
+SWNAME = 'BMS Download Helper'
+SWVER  = 'v1.0'
+
 # TODO
-# メニューバーに入れたい
-# URL入力ボックスでの右クリック
-# 完了したファイルを移動するモードの追加
-# ファイル数を見て多すぎる場合はスキップできるようにする
-# rar回避モードを入れる？
+# URL入力ボックスでの右クリック対応
+# ファイル数を見て多すぎる場合はスキップできるようにしたいけど、情報取得の時点で重いので悩む
 
 class UserSettings:
     def __init__(self, savefile='settings.json'):
@@ -36,6 +36,8 @@ class UserSettings:
         ,'dir_dl':'' # ブラウザのDownloadフォルダ
         ,'url':''
         ,'move_extracted_file':True # 処理済みファイルをDLフォルダ/doneに移動するかどうか
+        ,'skip_threshold':5000 # zip内ファイル数がこの数字以上ならスキップする(未実装だが、変数は先に追加)
+        ,'skip_rar':False
         }
         return ret
     def load_settings(self):
@@ -117,33 +119,54 @@ class GUIManager:
         if self.window:
             self.window.close()
         layout = [
-            [sg.Text('ブラウザのファイル保存先', font=self.FONT), sg.Button('変更', font=self.FONT, key='btn_select_dl')],
+            [sg.Text('ブラウザのファイル保存先: ', font=self.FONT), sg.Button('変更', font=self.FONT, key='btn_select_dl')],
             [sg.Text('', key='dir_dl', font=self.FONT)],
+            [sg.Checkbox('展開済みファイルをdoneフォルダに移動する', key='chk_done', font=self.FONT, default=self.settings.params['move_extracted_file'])],
             [sg.Text('BMSデータ保存先', font=self.FONT), sg.Button('変更', font=self.FONT, key='btn_select_bms')],
             [sg.Text('', key='dir_bms', font=self.FONT)],
-            [sg.Checkbox('展開済みファイルをdoneフォルダに移動する', key='chk_done', font=self.FONT, default=self.settings.params['move_extracted_file'])],
-            [sg.Button('close', key='btn_close_setting')],
+            [sg.Checkbox('RARファイルをスキップする', key='chk_skip_rar', font=self.FONT, default=self.settings.params['skip_rar'])],
+            [sg.Text('(RARファイルの解凍は遅い&WinRARだと動画の展開に失敗するので、手動での解凍を推奨)', font=self.FONT)],
+            [sg.Button('close', key='btn_close_setting', font=self.FONT)],
             ]
         ico=self.ico_path('icon.ico')
-        self.window = sg.Window('BMS導入支援君 - 設定', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
+        self.window = sg.Window(f'{SWNAME} - 設定', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
         self.window['dir_dl'].update(self.settings.params['dir_dl'])
         self.window['dir_bms'].update(self.settings.params['dir_bms'])
+
+    def gui_info(self): #情報表示用
+        if self.window:
+            self.window.close()
+        self.mode = 'info'
+        layout = [
+            [sg.Text(f'{SWNAME}', font=self.FONT)],
+            [sg.Text(f'version: {SWVER}', font=self.FONT)],
+            [sg.Text(f'')],
+            [sg.Text(f'author: かたさん (@cold_planet_)')],
+            [sg.Text(f'https://github.com/dj-kata/bms_download_helper', enable_events=True, key="URL https://github.com/dj-kata/bms_download_helper", font=('Meiryo', 10, 'underline'))],
+            [sg.Button('OK', key='btn_close_info', font=self.FONT)],
+        ]
+        ico=self.ico_path('icon.ico')
+        self.window = sg.Window(f"{SWNAME}について", layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(400,220))
+
 
     def gui_main(self): # テーブル表示用
         if self.window:
             self.window.close()
         self.mode = 'main'
         header=['LV','Title','Artist','Proposer','差分が別','sha256']
+        menuitems = [['ファイル',['設定',]],['ヘルプ',[f'{SWNAME}について']]]
         layout = [
-            [sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
+            [sg.Menubar(menuitems, key='menu')],
+            #[sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
+            [sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT)],
+            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(75,1))],
             [sg.Table([], key='table', headings=header, font=self.FONT, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40,10,7,15], justification='left', size=(1,10))],
             [sg.Text('', key='txt_info', font=('Meiryo',10))],
             ]
         ico=self.ico_path('icon.ico')
 
-        self.window = sg.Window('BMS導入支援君', layout, grab_anywhere=True,return_keyboard_events=True,resizable=True,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(800,600))
+        self.window = sg.Window(SWNAME, layout, grab_anywhere=True,return_keyboard_events=True,resizable=True,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(800,600))
         self.window['table'].expand(expand_x=True, expand_y=True)
 
     def update_table(self, url):
@@ -179,26 +202,26 @@ class GUIManager:
                 os.mkdir(self.settings.params['dir_dl']+'\done')
 
         self.window.write_event_value('-INFO-', f'展開モード開始。ファイル一覧を取得中。')
-        extractor = Extractor(self.settings.params['dir_dl'], self.settings.params['dir_bms'])
+        extractor = Extractor(self.settings.params['dir_dl'], self.settings.params['dir_bms'], self.settings.params['skip_threshold'])
         self.window.write_event_value('-INFO-', f'ファイル一覧取得完了。')
         flg_err = False
-        cnt_bms = 0 # bms関連フォルダの数
+        num_bms = 0 # bms関連フォルダの数(分母)
+        cnt_cur = 0 # 処理済みbmsフォルダ(分子)
         for z in extractor.ziplist:
             if z.is_for_bms:
-                cnt_bms += 1
+                num_bms += 1
         # 本体を解凍
         for z in extractor.ziplist:
             if z.is_for_bms and not z.only_bms:
-                self.window.write_event_value('-INFO-', f'本体を展開中: {z.filename}')
-                z.extractall(self.settings.params['dir_bms'])
-                if self.settings.params['move_extracted_file']:
-                    z.close()
-                    fff = str(z.filename).split('/')[-1].split('\\')[-1]
-                    shutil.move(z.filename, self.settings.params['dir_dl']+f'\done\{fff}')
+                cnt_cur += 1
+                if self.settings.params['skip_rar']:
+                    if str(z.filename).lower()[-4:] == '.rar':
+                        self.window.write_event_value('-INFO-', f'({cnt_cur} / {num_bms}) RARファイルをスキップ {z.filename} ({len(z.filelist):,} files)')
+                        continue
                 try:
-                    self.window.write_event_value('-INFO-', f'本体を展開中: {z.filename}')
+                    self.window.write_event_value('-INFO-', f'({cnt_cur} / {num_bms}) 本体を展開中: {z.filename} ({len(z.filelist):,} files)')
                     err = z.extractall(self.settings.params['dir_bms'])
-                    if self.settings.params['move_extracted_file']:
+                    if self.settings.params['move_extracted_file'] and err == '':
                         z.close()
                         fff = str(z.filename).split('/')[-1].split('\\')[-1]
                         shutil.move(z.filename, self.settings.params['dir_dl']+f'\done\{fff}')
@@ -209,10 +232,15 @@ class GUIManager:
         # 差分を解凍
         for z in extractor.ziplist:
             if z.is_for_bms and z.only_bms:
+                cnt_cur += 1
+                if self.settings.params['skip_rar']:
+                    if str(z.filename).lower()[-4:] == '.rar':
+                        self.window.write_event_value('-INFO-', f'({cnt_cur} / {num_bms}) RARファイルをスキップ {z.filename} ({len(z.filelist):,} files)')
+                        continue
                 try:
-                    self.window.write_event_value('-INFO-', f'差分を展開中: {z.filename}')
+                    self.window.write_event_value('-INFO-', f'({cnt_cur} / {num_bms}) 差分を展開中: {z.filename}')
                     maxval = z.get_score_and_extract(self.settings.params['dir_bms'], 0.95)
-                    if self.settings.params['move_extracted_file'] and (maxval >= 0.95):
+                    if self.settings.params['move_extracted_file'] and (maxval >= 0.95) and (not z.has_error):
                         z.close()
                         fff = str(z.filename).split('/')[-1].split('\\')[-1]
                         shutil.move(z.filename, self.settings.params['dir_bms']+f'\done\{fff}')
@@ -222,8 +250,9 @@ class GUIManager:
 
         if flg_err:
             #sg.popup('一部ファイルの解凍時にエラーが発生しました。\n(rar解凍ソフトがインストールされていないかも?)\nWinRARのインストールをお願いします。\nhttps://github.com/dj-kata/bms_downloader')
-            print('一部ファイルの解凍時にエラーが発生しました。\n(rar解凍ソフトがインストールされていないかも?)\nWinRARのインストールをお願いします。\nhttps://github.com/dj-kata/bms_downloader')
-        self.update_info(f'DLフォルダ内ファイルの展開完了。')
+            self.update_info('展開完了。一部ファイルの解凍時にエラーが発生しました。(RARファイル関連?)')
+        else:
+            self.update_info(f'DLフォルダ内ファイルの展開完了。')
 
     def main(self):
         self.gui_main()
@@ -241,8 +270,10 @@ class GUIManager:
                     self.settings.params['url'] = val['url_table']
                 if 'chk_done'in val.keys():
                     self.settings.params['move_extracted_file'] = val['chk_done']
+                if 'chk_skip_rar'in val.keys():
+                    self.settings.params['skip_rar'] = val['chk_skip_rar']
             
-            if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'btn_close_setting'): # 終了処理
+            if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'btn_close_setting', 'btn_close_info'): # 終了処理
                 if self.mode == 'main':
                     self.settings.params['lx'] = self.window.current_location()[0]
                     self.settings.params['ly'] = self.window.current_location()[1]
@@ -257,9 +288,15 @@ class GUIManager:
                     self.mode = 'main'
             elif ev == '-INFO-':
                 print('-INFO-:',val[ev].strip())
-                self.window['txt_info'].update(val[ev])
-            elif ev == 'btn_setting':
+                if self.mode == 'main':
+                    self.window['txt_info'].update(val[ev])
+            elif ev in ('btn_setting', '設定'):
                 self.gui_setting()
+            elif ev in (f'{SWNAME}について'):
+                self.gui_info()
+            elif ev.startswith('URL '):
+                url = ev.split(' ')[1]
+                webbrowser.open(url)
             elif ev.startswith('btn_select_'):
                 target = ev.split('_')[-1]
                 #tmp = sg.popup_get_folder('ブラウザのファイル保存先を指定してください。')
