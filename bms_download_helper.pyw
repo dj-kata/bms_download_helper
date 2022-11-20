@@ -175,9 +175,9 @@ class GUIManager:
         layout = [
             [sg.Menubar(menuitems, key='menu')],
             #[sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
-            [sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(75,1), right_click_menu=right_click_menu)],
+            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(60,1), right_click_menu=right_click_menu),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT)],
+            [sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Table([], key='table', headings=header, font=self.FONT, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40,7,10,15], justification='left', size=(1,10))],
             [sg.Text('', key='txt_info', font=('Meiryo',10))],
             ]
