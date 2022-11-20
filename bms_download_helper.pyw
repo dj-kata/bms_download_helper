@@ -189,10 +189,16 @@ class GUIManager:
     def update_table(self, url):
         try:
             header_filename = self.get_header_filename(url)
-            url_header = re.sub(url.split('/')[-1], header_filename, url)
+            if ('http://' in header_filename) or ('https://' in header_filename):
+                url_header = header_filename
+            else:
+                url_header = re.sub(url.split('/')[-1], header_filename, url)
             ### header情報から難易度名などを取得
             info = self.read_table_json(url_header)
-            url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
+            if ('http://' in info['data_url']) or ('https://' in info['data_url']):
+                url_dst = info['data_url']
+            else:
+                url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
             self.songs = self.read_table_json(url_dst)
             print(f'url_header = {url_header}')
             print(f'url_dst = {url_dst}')
