@@ -18,9 +18,11 @@ from extract import Extractor
 import rarfile
 import shutil
 import traceback
+import sqlite3
+import pandas as pd
 
 SWNAME = 'BMS Download Helper'
-SWVER  = 'v1.0'
+SWVER  = 'v1.1'
 
 # TODO
 # URL入力ボックスでの右クリック対応
@@ -68,6 +70,7 @@ class UserSettings:
 class GUIManager:
     def __init__(self, savefile='settings.json'):
         self.settings = UserSettings(savefile)
+        self.lastdata = None # 最後に読み込んだリスト
         sg.theme('SystemDefault')
         self.FONT = ('Meiryo',12)
         self.window = False
@@ -181,7 +184,7 @@ class GUIManager:
             [sg.Menubar(menuitems, key='menu')],
             #[sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Combo(self.settings.params['list_url'], key='url_table', font=self.FONT, size=(60,1)),sg.Button('read', key='btn_read_table', font=self.FONT),sg.Button('del', key='btn_del_table', font=self.FONT)],
+            [sg.Combo(self.settings.params['list_url'], key='url_table', font=self.FONT, size=(60,1)),sg.Button('read', key='btn_read_table', font=self.FONT),sg.Button('del', key='btn_del_table', font=self.FONT),sg.Button('filter', key='btn_filter', font=self.FONT, tooltip='beatorajaの曲情報を読み込み、所持済みパックを色付けする。\n※beatorajaのパス設定が必要')],
             [sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Table([], key='table', headings=header, font=self.FONT, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40,7,10,15], justification='left', size=(1,10))],
             [sg.Text('', key='txt_info', font=('Meiryo',10))],
@@ -231,6 +234,7 @@ class GUIManager:
                 data.append(onesong)
             self.window['table'].update(data)
             self.update_info(f'難易度表読み込み完了。({self.name})')
+            self.lastdata = data
             # URL一覧に登録
             if url not in self.settings.params['list_url']:
                 self.settings.params['list_url'].append(url)
@@ -242,6 +246,46 @@ class GUIManager:
     def update_info(self, msg):
         print(msg)
         self.window['txt_info'].update(msg)
+
+    def filter(self):
+        """beatorajaの楽曲dbを参照し、所持済み譜面を色付けする
+        """
+        if self.lastdata == None:
+            self.update_info('難易度表の読み込みを先に行ってください。')
+            return False
+        try:
+            conn = sqlite3.connect(os.path.join(self.settings.params['dir_oraja'], 'songdata.db'))
+            self.df_song =pd.read_sql('SELECT * FROM song', conn)
+            self.df_folder =pd.read_sql('SELECT * FROM folder', conn)
+
+            conn = sqlite3.connect(os.path.join(self.settings.params['dir_oraja'], 'songinfo.db'))
+            self.df_info =pd.read_sql('SELECT * FROM information', conn)
+        except Exception:
+            self.update_info('beatoraja dbfile read error!')
+            return False
+        # ここまで来ていれば楽曲dbが読めている
+        allsha256 = self.df_song['sha256'].values
+        allmd5    = self.df_song['md5'].values
+        ret = [] # T/Fの配列、sizeはlastdataと同じ
+        cnt = 0
+        for d in self.lastdata:
+            hash = d[-1]
+            title = d[1]
+            if len(hash) == 32:
+                if hash in allmd5:
+                    ret.append([len(ret), '#000000', '#666666'])
+                else:
+                    ret.append([len(ret), '#000000', '#ffffff'])
+                    cnt += 1
+            else:
+                if hash in allsha256:
+                    ret.append([len(ret), '#000000', '#666666'])
+                else:
+                    ret.append([len(ret), '#000000', '#ffffff'])
+                    cnt += 1
+        assert(len(ret)==len(self.lastdata))
+        self.window['table'].update(row_colors=ret)
+        self.update_info(f'所持状況の反映が完了。(未所持: {cnt}/{len(ret)})')
 
     def parse_all(self):
         if self.settings.params['move_extracted_file']: # 移動オプション有効時は移動先を作成しておく
@@ -388,6 +432,8 @@ class GUIManager:
                         th_parse.join()
                     th_parse = threading.Thread(target=self.parse_all, daemon=True)
                     th_parse.start()
+            elif ev == 'btn_filter':
+                self.filter()
 
 if __name__ == '__main__':
     a = GUIManager()
