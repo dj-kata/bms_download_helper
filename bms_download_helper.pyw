@@ -37,7 +37,7 @@ class UserSettings:
         ,'dir_dl':'' # ブラウザのDownloadフォルダ
         ,'dir_oraja':'' # orajaのインストールパス
         ,'url':''
-        ,'list_url':[] # 難易度表一覧
+        ,'list_url':["https://stellabms.xyz/sl/table.html", "https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html"] # 難易度表一覧
         ,'move_extracted_file':True # 処理済みファイルをDLフォルダ/doneに移動するかどうか
         ,'skip_threshold':5000 # zip内ファイル数がこの数字以上ならスキップする(未実装だが、変数は先に追加)
         ,'skip_rar':False
@@ -181,7 +181,7 @@ class GUIManager:
             [sg.Menubar(menuitems, key='menu')],
             #[sg.Button('設定', key='btn_setting', font=self.FONT),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT),sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Text('難易度表のURL', font=self.FONT)],
-            [sg.Input(self.settings.params['url'], key='url_table', font=self.FONT, size=(60,1), right_click_menu=right_click_menu),sg.Button('難易度表読み込み', key='btn_read_table', font=self.FONT)],
+            [sg.Combo(self.settings.params['list_url'], key='url_table', font=self.FONT, size=(60,1)),sg.Button('read', key='btn_read_table', font=self.FONT),sg.Button('del', key='btn_del_table', font=self.FONT)],
             [sg.Button('DL', key='btn_download',font=self.FONT),sg.Button('parse', key='btn_parse', font=self.FONT)],
             [sg.Table([], key='table', headings=header, font=self.FONT, vertical_scroll_only=False, auto_size_columns=False, col_widths=[5,40,40,7,10,15], justification='left', size=(1,10))],
             [sg.Text('', key='txt_info', font=('Meiryo',10))],
@@ -231,6 +231,10 @@ class GUIManager:
                 data.append(onesong)
             self.window['table'].update(data)
             self.update_info(f'難易度表読み込み完了。({self.name})')
+            # URL一覧に登録
+            if url not in self.settings.params['list_url']:
+                self.settings.params['list_url'].append(url)
+                self.window['url_table'].update(values=self.settings.params['list_url'])
         except: # URLがおかしい
             #traceback.print_exc()
             self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
@@ -359,6 +363,11 @@ class GUIManager:
                 url = val['url_table']
                 #self.gui_table(url)
                 self.update_table(url)
+            elif ev == 'btn_del_table':
+                url = val['url_table']
+                if url in self.settings.params['list_url']:
+                    self.settings.params['list_url'].pop(self.settings.params['list_url'].index(url))
+                    self.window['url_table'].update(values=self.settings.params['list_url'])
             elif ev == 'btn_download':
                 for idx in val['table']:
                     #print(f"selected: {self.songs[idx]['title']}, hash: {self.songs[idx]['sha256']}")
