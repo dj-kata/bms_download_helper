@@ -35,7 +35,9 @@ class UserSettings:
         'lx':0,'ly':0
         ,'dir_bms':'' # BMS置き場
         ,'dir_dl':'' # ブラウザのDownloadフォルダ
+        ,'dir_oraja':'' # orajaのインストールパス
         ,'url':''
+        ,'list_url':[] # 難易度表一覧
         ,'move_extracted_file':True # 処理済みファイルをDLフォルダ/doneに移動するかどうか
         ,'skip_threshold':5000 # zip内ファイル数がこの数字以上ならスキップする(未実装だが、変数は先に追加)
         ,'skip_rar':False
@@ -142,12 +144,15 @@ class GUIManager:
             [sg.Text('', key='dir_bms', font=self.FONT)],
             [sg.Checkbox('RARファイルをスキップする', key='chk_skip_rar', font=self.FONT, default=self.settings.params['skip_rar'])],
             [sg.Text('(RARファイルの解凍は遅い&WinRARだと動画の展開に失敗するので、手動での解凍を推奨)', font=self.FONT)],
+            [sg.Text('beatorajaインストール先: ', font=self.FONT), sg.Button('変更', font=self.FONT, key='btn_select_oraja')],
+            [sg.Text('', key='dir_oraja', font=self.FONT)],
             [sg.Button('close', key='btn_close_setting', font=self.FONT)],
             ]
         ico=self.ico_path('icon.ico')
         self.window = sg.Window(f'{SWNAME} - 設定', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']))
         self.window['dir_dl'].update(self.settings.params['dir_dl'])
         self.window['dir_bms'].update(self.settings.params['dir_bms'])
+        self.window['dir_oraja'].update(self.settings.params['dir_oraja'])
 
     def gui_info(self): #情報表示用
         if self.window:
