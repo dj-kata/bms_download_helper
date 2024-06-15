@@ -264,13 +264,12 @@ class GUIManager:
             self.update_info('beatoraja dbfile read error!')
             return False
         # ここまで来ていれば楽曲dbが読めている
-        allsha256 = self.df_song['sha256'].values
-        allmd5    = self.df_song['md5'].values
+        allsha256 = set(self.df_song['sha256'].values)
+        allmd5    = set(self.df_song['md5'].values)
         ret = [] # T/Fの配列、sizeはlastdataと同じ
         cnt = 0
         for d in self.lastdata:
             hash = d[-1]
-            title = d[1]
             if len(hash) == 32:
                 if hash in allmd5:
                     ret.append([len(ret), '#000000', '#666666'])
